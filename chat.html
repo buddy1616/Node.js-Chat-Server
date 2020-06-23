@@ -1,0 +1,602 @@
+<!doctype HTML>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Node.js Test Chat Server</title>
+	<style>
+	html, body {
+		height: 100%;
+		min-height: 100%;
+	}
+	body {
+		font-size: 20px;
+		font-family: Segoe UI,Open Sans,Arial,Sans-Serif;
+		padding: 0 20px 20px 20px;
+		color: #1234ff;
+	}
+	h1 {
+		font-size: 1.25em;
+		font-weight: bold;
+	}
+
+	.user {
+		color: #1234ff;
+	}
+	.user a:link, .user a:active,
+			.user a:visited, .user a:hover {
+		color: #1234ff;
+		text-decoration: none;
+	}
+	.userSelf {
+		color: #ff1234;
+	}
+	.userSelf a:link, .userSelf a:active,
+			.userSelf a:visited, .userSelf a:hover {
+		color: #ff1234;
+		text-decoration: none;
+	}
+	
+	li {
+		list-style-type: none;
+	}
+	ul {
+		margin: 0;
+		padding: 0;
+	}
+	
+	.message, .messageTime, .messageSubDiv, .messageUser, .messageAction, .messageContents {
+		overflow-wrap: break-word;
+		overflow-wrap: break-word;
+		word-break: break-all;
+	}
+	.messageSubDiv {
+		display: inline-block;
+	}
+	.messageGeneric {
+		color: #1234ff;
+		margin-bottom: .2vh;
+	}
+	.messageSelf {
+		color: #ff1234;
+	}
+	.messagePrivateIn {
+		color: #ff00ff;
+	}
+	.messagePrivateOut {
+		color: #880088;
+	}
+	
+	.messageUser {
+		font-weight: bold;
+	}
+	.messageContents {
+	}
+	.messageTime {
+		font-style: italic;
+	}
+	.event {
+		color: #ff00ff;
+		font-size: .75em;
+		font-style: italic;
+	}
+
+	#loginbox {
+		display: inline-block;
+		position: fixed;
+		top: 25%;
+		left: 50%;
+		-ms-transform: translate(-50%, -50%);
+		transform: translate(-50%, -50%);
+		text-align: center;
+		margin: 0 auto 0 auto;
+	}
+	#chatbox {
+		display: inline-block;
+		vertical-align: top;
+	}
+	#messagebox {
+		overflow-y: scroll;
+	}
+	#userbox {
+		display: inline-block;
+		width: calc(200px - 4vmin);
+		height: calc(75vh - 100px - 4vmin);
+		min-height: 200px;
+		vertical-align: top;
+		overflow-y: scroll;
+	}
+	#messagebox > :last-child, #userbox > :last-child, {
+		margin-bottom: 5vh;
+	}
+	
+	#commbox {
+		display: inline-block;
+	}
+	
+	/*computer screen, or mobile device in landscape*/
+	@media (min-aspect-ratio: 5/4) {
+		.mobileOnly {
+			display: none;
+		}
+		.box {
+			border-radius: 2vmin;
+			border: 2px solid #1234ff;
+			padding: 2vmin;
+		}
+		#loginbox {
+			width:300px;
+		}
+		.loginField {
+			width: 125px;
+		}
+		
+		#chatbox {
+			width: calc(80% - 200px - 4vmin);
+			height: calc(75vh - 100px - 4vmin);
+			min-width: 175px; min-height: 200px;
+		}
+		
+		#messagebox {
+			height: 80%;
+		}
+		.messageTime {
+			font-size: .75em;
+		}
+	}
+	/*mobile device in portrait*/
+	@media (max-aspect-ratio: 5/4) {
+		.desktopOnly {
+			display: none;
+		}
+		body {
+			font-size: 6vw;
+		}
+		input[type=text], input[type=password] {
+			border: 1px solid;
+			border-radius: 2vmin;
+		}
+		#loginbox {
+			width:80vw;
+			font-size: 6vw;
+		}
+		#loginButton {
+			width: 40vw;
+			height: 15vw;
+			font-size: 8vw;
+		}
+		.loginField {
+			width: 40vw;
+			height: 9vw;
+			font-size: 8vw;
+		}
+		
+		#chatbox {
+			width: 95vw;
+			height: 75vh;
+			margin: 0 auto 0 auto;
+		}
+		#messagebox {
+			height: 100%;
+		}
+		
+		#userbox {
+			display: none;
+		}
+		
+		#commbox {
+			position: fixed;
+			bottom: 0;
+			width: 100%;
+			height: 15vh;
+		}
+		#say {
+			width: 75vw;
+			height: 12vw;
+			font-size: 6vw;
+		}
+		#sayButton {
+			height: 12vw;
+			font-size: 6vw;
+		}
+		
+		.messageSelf, .messagePrivateOut {
+			text-align: right;
+			margin-left: 6vw;
+		}
+		.messageGeneric, .messagePrivateIn {
+			text-align: left;
+			margin-right: 6vw;
+		}
+		.messageSelf .messageUser {
+			display: none;
+		}
+		.messageSelf .messageSubDiv {
+			border: 1px solid;
+			border-radius: 2vmin;
+			background: #00cc88;
+			color: #ffffff;
+			padding: 1vw;
+		}
+		.messagePrivateOut .messageSubDiv {
+			border: 1px solid;
+			border-radius: 2vmin;
+			background: #880088;
+			color: #ffffff;
+			padding: 1vw;
+		}
+		.messageGeneric .messageSubDiv {
+			border: 1px solid;
+			border-radius: 2vmin;
+			background: #eeeeee;
+			color: #005555;
+			padding: 1vw;
+		}
+		.messagePrivateIn .messageSubDiv {
+			border: 1px solid;
+			border-radius: 2vmin;
+			background: #880088;
+			color: #ffffff;
+			padding: 1vw;
+		}
+		.messageTime {
+			font-size: .5em;
+		}
+	}
+	</style>
+	<script>
+		var view = 'login';
+		var handle = '';
+		var password = '';
+		var idKey = '';
+		
+		var users = [];
+		
+		var updateLag = 500;
+
+		function ajax(request)
+		{
+			var x = new XMLHttpRequest();
+			x.onreadystatechange = function() {
+				if ((this.readyState == 4) && (this.status == 200))
+				{
+					handleResponse(JSON.parse(this.responseText));
+				}
+			};
+			x.open("GET", request, true);
+			x.send();
+		}
+		function handleResponse(response)
+		{
+			if (response.success)
+			{
+				switch(response.arguments[0])
+				{
+					case 'update':
+						if ((updateUserList(response.data.userList))
+							|| (updateMessages(response.data.newMessages))) { updateLag = 500; }
+						else { updateLag += 250; }
+						
+						setTimeout(function(){ update(); }, Math.max(500, Math.min(5000, updateLag)));
+						lastUpdateTime = new Date();
+						break;
+					case 'post':
+						say.value = '';
+						updateUserList(response.data.userList);
+						updateMessages(response.data.newMessages);
+						lastUpdateTime = new Date();
+						break;
+					case 'login':
+						handle = response.data.handle.toLowerCase();
+						password = response.arguments[2];
+						idKey = response.data.idKey;
+						
+						loginview.style.display = 'none';
+						chatview.style.display = 'block';
+						updateUserList(response.data.userList);
+						updateMessages(response.data.newMessages);
+						setTimeout(function(){ update(); }, 1000);
+						break;
+					case 'logout':
+						location.reload();
+						break;
+				}
+			}
+			else
+			{
+				alert(response.messages);
+			}
+		}
+		
+		function login(nick, pass)
+		{
+			ajax('/login/' + encodeURIComponent(nick) + '/' + encodeURIComponent(pass));
+		}
+		function logout()
+		{
+			ajax('/logout/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password));
+		}
+		function update()
+		{
+			ajax('/update/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password));
+		}
+		
+		function post(mess)
+		{
+			if (mess.substring(0, 1) == '@')
+			{
+				post('/w ' + mess.substring(1));
+			}
+			else
+			{
+				if (mess.substring(0, 1) == '/')
+				{
+					var commIndex = mess.indexOf(' ');
+					var command = mess.substring(1, commIndex);
+					switch (command)
+					{
+						case 'w': case 'whisper':
+							var subComm = mess.substring(commIndex+1);
+							var targetIndex = subComm.indexOf(' ');
+							var target = getUserByHandle(subComm.substring(0, targetIndex));
+							var whisper = subComm.substring(targetIndex + 1);
+							
+							if (target !== null)
+							{
+								if (whisper != '')
+								{
+									ajax('/post/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password) + '/' + encodeURIComponent(whisper) + '/' + encodeURIComponent(target.idKey));
+								}
+								else
+								{
+									messagebox.appendChild(newEventMessage('Cannot send an empty whisper.'));
+								}
+							}
+							else
+							{
+								messagebox.appendChild(newEventMessage('No user by that name.'));
+							}
+							break;
+					}
+				}
+				else
+				{
+					ajax('/post/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password) + '/' + encodeURIComponent(mess));
+				}
+			}
+		}
+		
+		function updateUserList(u)
+		{
+			var r = false;
+			var oldIdKeys = []; for (var i=0;i<users.length;i++) { oldIdKeys.push(users[i].idKey); }
+			var newIdKeys = []; for (var i=0;i<u.length;i++) { newIdKeys.push(u[i].idKey); }
+			var joinUsers = [];
+			for (var i=0;i<oldIdKeys.length;i++)
+			{
+				if (!newIdKeys.includes(oldIdKeys[i]))
+				{
+					if (oldIdKeys[i] == idKey) { location.reload(); }
+					removeUserFromUserList(oldIdKeys[i]);
+					messagebox.appendChild(newLeaveMessage(users[i].idKey));
+					r = true;
+				} 
+			}
+			users = u;
+			for (var i=0;i<users.length;i++)
+			{
+				if (!oldIdKeys.includes(users[i].idKey))
+				{
+					addUserToUserList(users[i]);
+					if (users[i].isNew)
+					{
+						messagebox.appendChild(newJoinMessage(users[i].idKey));
+						users[i].isNew = false;
+					}
+					r = true;
+				}
+			}
+			return r;
+		}
+		function getUserById(id)
+		{
+			for (var i=0;i<users.length;i++)
+			{
+				if (users[i].idKey == id) { return users[i]; }
+			}
+			return null;
+		}
+		function getUserByHandle(h)
+		{
+			for (var i=0;i<users.length;i++)
+			{
+				if (users[i].handle.toLowerCase() == h.toLowerCase()) { return users[i]; }
+			}
+			return null;
+		}
+		function getUserLi(u)
+		{
+			var li = document.createElement('li');
+			li.id = userLiId(u.idKey);
+			li.className = 'userLi';
+
+			li.innerHTML = '<a href="#" onclick="openUserMenu(\'' + u.idKey + '\');">' + u.handle.toLowerCase() + '</a>';
+			li.className = (u.idKey == idKey) ? 'userSelf' : 'user';
+			li.setAttribute('data-handle', u.handle.toLowerCase());
+			var userDiv = document.createElement('div')
+			userDiv.id = userDivId(u.idKey);
+			userDiv.style.display = 'none';
+			userDiv.style.textAlign = 'right';
+
+			if (u.idKey == idKey)
+			{
+				userDiv.innerHTML = '<a href="#" onclick="logout();">Log Out</a>';
+			}
+			else
+			{
+				userDiv.innerHTML = '<a href="#" onclick="say.value = \'@' + u.handle.toLowerCase() + ' \';">Whisper</a>';
+			}
+			li.appendChild(userDiv);
+			return li;
+		}
+		function userLiId(id) { return id + '-UserLi'; }
+		function userDivId(id) { return id + '-UserDiv'; }
+
+		function openUserMenu(id)
+		{
+			var div = document.getElementById(userDivId(id));
+			var alreadyOpen = (div.style.display == '') ? true : false;
+			for (var i=0;i<users.length;i++) { closeUserMenu(users[i].idKey); }
+			if (!alreadyOpen)
+			{
+				div.style.display = '';
+				document.getElementById(userLiId(id)).style = 'border: 1px solid; padding: 1px 5px 2px 2px; border-radius: 5px;';
+			}
+		}
+		function closeUserMenu(id)
+		{
+			document.getElementById(userDivId(id)).style.display = 'none';
+			document.getElementById(userLiId(id)).style = '';
+		}
+		function addUserToUserList(u)
+		{
+			var newLi = getUserLi(u);
+			var lis = userList.getElementsByTagName('li');
+			for (var i=0;i<lis.length;i++)
+			{
+				if (lis[i].getAttribute('data-handle') > u.handle.toLowerCase())
+				{
+					userList.insertBefore(newLi, lis[i]);
+					return;
+				}
+			}
+			userList.appendChild(newLi);
+		}
+		function removeUserFromUserList(id)
+		{
+			for (var i=0;i<userList.children.length;i++)
+			{
+				if (userList.children[i].id == id + '-UserLi')
+				{
+					userList.removeChild(userList.children[i]);
+					break;
+				}
+			}
+		}
+		function updateMessages(mess)
+		{
+			var r = false;
+			for (var i=0;i<mess.length;i++)
+			{
+				var nm = newMessage(mess[i]);
+				if (nm !== null)
+				{
+					messagebox.appendChild(nm);
+					messagebox.scrollTop = messagebox.scrollHeight;
+					r = true;
+				}
+			}
+			return r;
+		}
+		function newMessage(mess)
+		{
+			var messTime = new Date(mess.timestamp);
+			var timeString = messTime.getHours().toString().padStart(2, '0') + ':' + messTime.getMinutes().toString().padStart(2, '0');
+			for (var i=0;i<users.length;i++)
+			{
+				if (users[i].idKey == mess.fromUser)
+				{
+					var div = document.createElement('div');
+					div.className = 'message ' + ((mess.toUser !== null) ? ((mess.fromUser == idKey) ? 'messagePrivateOut' : 'messagePrivateIn') : ((mess.fromUser == idKey) ? 'messageSelf' : 'messageGeneric'));
+					div.innerHTML = '<span class="messageTime">' + timeString + '</span> '
+									+ '<div class="messageSubDiv"><span class="messageUser">' + ((mess.fromUser == idKey) ? 'You' : users[i].handle.toLowerCase()) + '<br class="mobileOnly" />' + '</span> '
+									+ '<span class="messageAction">' + ((mess.toUser !== null) ? '<span class="desktopOnly">whispered</span> to <b>' + ((mess.toUser != idKey) ?  getUserById(mess.toUser).handle.toLowerCase() : 'you') + '<span class="mobileOnly">:</span></b>' : '<span class="desktopOnly">said</span>') + '<span class="desktopOnly">:</span> </span> '
+									+ '<span class="messageContents">' + mess.contents + '</span></div>';
+					return div;
+				}
+			}
+			return null;
+		}
+		function newEventMessage(mess)
+		{
+			var messTime = new Date();
+			var timeString = messTime.getHours().toString().padStart(2, '0') + ':' + messTime.getMinutes().toString().padStart(2, '0');
+			var div = document.createElement('div');
+			div.className = 'event';
+			div.innerHTML = timeString + ' ' + mess;
+			return div;
+		}
+		function newJoinMessage(id)
+		{
+			for (var i=0;i<users.length;i++)
+			{
+				if (users[i].idKey == id) { return newEventMessage(users[i].handle.toLowerCase() + ' joined the chat'); }
+			}
+			return '';
+		}
+		function newLeaveMessage(id)
+		{
+			for (var i=0;i<users.length;i++)
+			{
+				if (users[i].idKey == id) { return newEventMessage(users[i].handle.toLowerCase() + ' left the chat'); }
+			}
+			return '';
+		}
+	</script>
+</head>
+<body onresize="messagebox.scrollTop = messagebox.scrollHeight;">
+<div id="loginview" style="text-align: center;">
+	<div id="loginbox" class="box">
+		<table style="margin: 0 auto 0 auto;">
+			<tr><td align="right"><label for="handle">Handle:</label></td><td align="left"><input type="text" id="handleInput" name="handle" class="loginField" maxlength="10" /></td></tr>
+			<tr><td align="right"><label for="password">Password:</label></td><td align="left"><input type="password" id="passwordInput" name="password"  class="loginField" maxlength="10" /></td></tr>
+		</table>
+		<button type="button" id="loginButton" onclick="if ((handleInput.value != '') && (passwordInput.value != '')) { login(handleInput.value, passwordInput.value); }">Join Chat</button>
+	</div>
+</div>
+<div id="chatview" style="display: none;">
+	<div id="chatbox" class="box">
+		<div id="messagebox">
+			<h1>Super Happy Fun Chat</h1>
+		</div>
+		<hr class="desktopOnly" />
+		<div id="commbox"/>
+			<input type="text" id="say" size="100" maxlength="250" /> <button type="button" id="sayButton" onclick="if (say.value != '') { post(say.value); }">Say</button>
+		</div>
+	</div><div id="userbox" class="box">
+		<ul id="userList"></ul>
+	</div><br />
+</div>
+<script>
+	var handleInput = document.getElementById('handleInput');
+	var passwordInput = document.getElementById('passwordInput');
+	var loginButton = document.getElementById('loginButton');
+	var userList = document.getElementById('userList');
+	var say = document.getElementById('say');
+	var sayButton = document.getElementById('sayButton');
+	var chatbox = document.getElementById('chatbox');
+	var messagebox = document.getElementById('messagebox');
+
+	handleInput.addEventListener('keyup', function(event) {
+			if (event.keyCode === 13)
+			{
+				event.preventDefault();
+				loginButton.click();
+			}
+		}); 
+	passwordInput.addEventListener('keyup', function(event) {
+			if (event.keyCode === 13)
+			{
+				event.preventDefault();
+				loginButton.click();
+			}
+		}); 
+	say.addEventListener('keyup', function(event) {
+			if (event.keyCode === 13)
+			{
+				event.preventDefault();
+				sayButton.click();
+			}
+		});
+</script>
+</body>
+</html>
