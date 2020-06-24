@@ -6,15 +6,18 @@ var serverPassword = 'admin';
 var serverPort = '8081';
 var timeoutInterval = 6000;
 var pruneInterval = 600000;
+var kickInterval = 300000;
 var commArgs = process.argv.slice(2);
 for (var i=0;i<commArgs.length;i++)
 {
 	if ((commArgs[i] == '-pass') && (commArgs.length > i+1)) { serverPassword = commArgs[i+1]; }
-	if ((commArgs[i] == '-port') && (commArgs.length > i+1)) { serverPort = commArgs[i+1]; }
-	if ((commArgs[i] == '-timeout') && (commArgs.length > i+1)) { timeoutInterval = commArgs[i+1]; }
-	if ((commArgs[i] == '-prune') && (commArgs.length > i+1)) { pruneInterval = commArgs[i+1]; }
+	else if ((commArgs[i] == '-port') && (commArgs.length > i+1)) { serverPort = commArgs[i+1]; }
+	else if ((commArgs[i] == '-timeout') && (commArgs.length > i+1)) { timeoutInterval = commArgs[i+1]; }
+	else if ((commArgs[i] == '-prune') && (commArgs.length > i+1)) { pruneInterval = commArgs[i+1]; }
+	else if ((commArgs[i] == '-kick') && (commArgs.length > i+1)) { kickInterval = commArgs[i+1]; }
 }
 
+const ERROR_NOCONTENT = 'post content was blank';
 const ERROR_NOAUTH = 'user or password incorrect';
 const ERROR_NOCRED = 'must supply user id and password';
 const ERROR_SERVERPASS = 'must supply server password';
@@ -52,24 +55,46 @@ http.createServer(function (request, response) {
 					}
 					else { response.end(jsonResponse(false, ERROR_NOCRED, null, args)); }
 					break;
-				case 'post': //0-post/1-userid/2-password/3-message[/4-touser]
+				case 'post': //0-post/1-userid/2-password/3-message/4-type[/5-touser]
 					if (args.length >= 4)
 					{
 						var u = auth(args[1], args[2]);
 						if (u !== null)
 						{
-							var tou = null;
-							if (args.length > 4)
+							if (args[3] != '')
 							{
-								tou = getUserById(args[4])
-								if (tou === null)
+								var newMess = new Message(u.idKey, null, htmlEncode(args[3]));
+								if (args.length > 4)
 								{
-									response.end(jsonResponse(false, 'user id not found', null, args));
-									return;
+									switch (args[4])
+									{
+										case 'emote': newMess.isEmote = true; break;
+										case 'image': newMess.isImage = true; break;
+										case 'whisper':
+											if (args.length > 5)
+											{
+												var tou = getUserById(args[5])
+												if (tou !== null)
+												{
+													newMess.toUser = tou.idKey;
+												}
+												else
+												{
+													response.end(jsonResponse(false, 'user id not found', getUpdate(u), args));
+													return;
+												}
+											}
+											break;
+									}
 								}
+								messages.push(newMess);
+								u.lastPost = new Date();
+								response.end(jsonResponse(true, null, getUpdate(u), args));
 							}
-							messages.push(new Message(u.idKey, (tou !== null) ? tou.idKey : null, null, htmlEncode(args[3])));
-							response.end(jsonResponse(true, null, getUpdate(u), args));
+							else
+							{
+								response.end(jsonResponse(false, ERROR_NOCONTENT, getUpdate(u), args));
+							}
 						}
 						else { response.end(jsonResponse(false, ERROR_NOAUTH, null, args)); }
 					}
@@ -179,6 +204,7 @@ http.createServer(function (request, response) {
 }).listen(serverPort);
 
 setInterval(prune, pruneInterval);
+setInterval(kick, kickInterval);
 console.log('Listening on port: ' + serverPort + '.');
 
 function stayAlive(u)
@@ -199,6 +225,17 @@ function prune()
 		if (t - messages[i].timestamp.getTime() > pruneInterval)
 		{
 			messages.splice(i, 1);
+		}
+	}
+}
+function kick()
+{
+	for (var i=0;i<users.length;i++)
+	{
+		if ((new Date()).getTime() - users[i].lastPost.getTime() > kickInterval)
+		{
+			users[i].loggedIn = false;
+			console.log(users[i].handle.toLowerCase() + ' was kicked from chat due to inactivity (' + users[i].idKey + ')');
 		}
 	}
 }
@@ -268,6 +305,7 @@ function User(nick, id, pass, ip, time, last)
 		joinTime: (time !== null) ? time : new Date(),
 		lastLogin: (time !== null) ? time : new Date(),
 		lastUpdate: (last !== null) ? last : new Date(),
+		lastPost: new Date(),
 		isMod: false,
 		loggedIn : false,
 	};
@@ -292,13 +330,15 @@ function auth(id, pass)
 	return null;
 }
 
-function Message(from, to, time, mess)
+function Message(from, time, mess)
 {
 	return {
 		fromUser: from,
-		toUser: to,
 		timestamp: (time !== null) ? time : new Date(),
 		contents: mess,
+		toUser: null,
+		isEmote: false,
+		isImage: false,
 	};
 }
 

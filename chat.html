@@ -79,6 +79,15 @@
 		font-size: .75em;
 		font-style: italic;
 	}
+	
+	.emote {
+		color: #558855;
+		font-style: italic;
+	}
+	.imagePost img {
+		max-width: 80%;
+		max-height: 300px;
+	}
 
 	#loginbox {
 		display: inline-block;
@@ -320,7 +329,7 @@
 			ajax('/update/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password));
 		}
 		
-		function post(mess)
+		function post(mess) //0-post/1-userid/2-password/3-message/4-type[/5-touser]
 		{
 			if (mess.substring(0, 1) == '@')
 			{
@@ -331,7 +340,7 @@
 				if (mess.substring(0, 1) == '/')
 				{
 					var commIndex = mess.indexOf(' ');
-					var command = mess.substring(1, commIndex);
+					var command = mess.substring(1, (commIndex > 1) ? commIndex : mess.length).toLowerCase();
 					switch (command)
 					{
 						case 'w': case 'whisper':
@@ -344,17 +353,41 @@
 							{
 								if (whisper != '')
 								{
-									ajax('/post/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password) + '/' + encodeURIComponent(whisper) + '/' + encodeURIComponent(target.idKey));
+									ajax('/post/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password) + '/' + encodeURIComponent(whisper) + '/whisper/' + encodeURIComponent(target.idKey));
 								}
 								else
 								{
-									messagebox.appendChild(newEventMessage('Cannot send an empty whisper.'));
+									addMessage(newEventMessage('Cannot send an empty whisper.'));
 								}
 							}
 							else
 							{
-								messagebox.appendChild(newEventMessage('No user by that name.'));
+								addMessage(newEventMessage('No user by that name.'));
 							}
+							break;
+						default:
+							var type = '';
+							var errMess = '';
+							if (['me', 'em', 'emote'].includes(command))
+							{
+								type = 'emote';
+								errMess = 'Cannot send an empty emote.';
+							}
+							else if (['i', 'im', 'img', 'image'].includes(command))
+							{
+								type = 'image';
+								errMess = 'Image URL is empty.';
+							}
+							else if (command == 'logout')
+							{
+								logout(); break;
+							}
+							var commContent = mess.substring(commIndex+1);
+							if ((commIndex > command.length) && (commContent.length > 0))
+							{
+								ajax('/post/' + encodeURIComponent(idKey) + '/' + encodeURIComponent(password) + '/' + encodeURIComponent(commContent) + '/' + type);
+							}
+							else { addMessage(newEventMessage(errMess)); }
 							break;
 					}
 				}
@@ -377,7 +410,7 @@
 				{
 					if (oldIdKeys[i] == idKey) { location.reload(); }
 					removeUserFromUserList(oldIdKeys[i]);
-					messagebox.appendChild(newLeaveMessage(users[i].idKey));
+					addMessage(newLeaveMessage(users[i].idKey));
 					r = true;
 				} 
 			}
@@ -389,7 +422,7 @@
 					addUserToUserList(users[i]);
 					if (users[i].isNew)
 					{
-						messagebox.appendChild(newJoinMessage(users[i].idKey));
+						addMessage(newJoinMessage(users[i].idKey));
 						users[i].isNew = false;
 					}
 					r = true;
@@ -433,7 +466,11 @@
 			}
 			else
 			{
-				userDiv.innerHTML = '<a href="#" onclick="say.value = \'@' + u.handle.toLowerCase() + ' \';">Whisper</a>';
+				userDiv.innerHTML = '<a href="#" onclick="say.value = \'@' + u.handle.toLowerCase() + ' \';">Whisper</a>'
+									+ '<br /><a href="#" onclick="post(\'/me dances with @' + u.handle.toLowerCase() + '.\');">Dance</a>'
+									+ '<br /><a href="#" onclick="post(\'/me pokes @' + u.handle.toLowerCase() + '.\');">Poke</a>'
+									+ '<br /><a href="#" onclick="post(\'/me slaps @' + u.handle.toLowerCase() + ' with a fish.\');">Slap</a>'
+									+ '<br /><a href="#" onclick="post(\'/me waves to @' + u.handle.toLowerCase() + '.\');">Wave</a>'
 			}
 			li.appendChild(userDiv);
 			return li;
@@ -484,18 +521,21 @@
 		}
 		function updateMessages(mess)
 		{
-			var r = false;
 			for (var i=0;i<mess.length;i++)
 			{
 				var nm = newMessage(mess[i]);
 				if (nm !== null)
 				{
-					messagebox.appendChild(nm);
-					messagebox.scrollTop = messagebox.scrollHeight;
-					r = true;
+					addMessage(nm);
+					return true;
 				}
 			}
-			return r;
+			return false;
+		}
+		function addMessage(m)
+		{
+			messagebox.appendChild(m);
+			messagebox.scrollTop = messagebox.scrollHeight;
 		}
 		function newMessage(mess)
 		{
@@ -506,15 +546,53 @@
 				if (users[i].idKey == mess.fromUser)
 				{
 					var div = document.createElement('div');
-					div.className = 'message ' + ((mess.toUser !== null) ? ((mess.fromUser == idKey) ? 'messagePrivateOut' : 'messagePrivateIn') : ((mess.fromUser == idKey) ? 'messageSelf' : 'messageGeneric'));
-					div.innerHTML = '<span class="messageTime">' + timeString + '</span> '
-									+ '<div class="messageSubDiv"><span class="messageUser">' + ((mess.fromUser == idKey) ? 'You' : users[i].handle.toLowerCase()) + '<br class="mobileOnly" />' + '</span> '
-									+ '<span class="messageAction">' + ((mess.toUser !== null) ? '<span class="desktopOnly">whispered</span> to <b>' + ((mess.toUser != idKey) ?  getUserById(mess.toUser).handle.toLowerCase() : 'you') + '<span class="mobileOnly">:</span></b>' : '<span class="desktopOnly">said</span>') + '<span class="desktopOnly">:</span> </span> '
-									+ '<span class="messageContents">' + mess.contents + '</span></div>';
+					if (mess.isEmote)
+					{
+						div.className = 'message emote';
+						div.innerHTML = '<span class="messageTime">' + timeString + '</span> '
+										+ '<div class="messageSubDiv"><span class="messageUser">' + users[i].handle.toLowerCase() + '</span> '
+										+ '<span class="messageContents">' + replaceHandleTags(mess.contents) + '</span></div>';
+					}
+					else if (mess.isImage)
+					{
+						div.className = 'message imagePost';
+						div.innerHTML = '<div class="messageSubDiv"><span class="messageUser">' + ((mess.fromUser == idKey) ? 'You' : '<span onclick="say.value += \'@' + users[i].handle.toLowerCase() + ' \';">' + users[i].handle.toLowerCase()) + '</span>' + ' sent an image:</span></div>';
+						var imgDiv = document.createElement('div')
+						imgDiv.style.textAlign = 'center';
+						var a = document.createElement('a');
+						a.href = mess.contents;
+						a.target = '_blank';
+						var img = document.createElement('img');
+						img.src = mess.contents;
+						img.setAttribute('onerror', 'this.parentElement.outerHTML = \'<i>Failed to load image</i>\';');
+						a.appendChild(img);
+						imgDiv.appendChild(a);
+						div.appendChild(imgDiv);
+					}
+					else
+					{
+						div.className = 'message ' + ((mess.toUser !== null) ? ((mess.fromUser == idKey) ? 'messagePrivateOut' : 'messagePrivateIn') : ((mess.fromUser == idKey) ? 'messageSelf' : 'messageGeneric'));
+						div.innerHTML = '<span class="messageTime">' + timeString + '</span> '
+										+ '<div class="messageSubDiv"><span class="messageUser">' + ((mess.fromUser == idKey) ? 'You' : '<span onclick="say.value += \'@' + users[i].handle.toLowerCase() + ' \';">' + users[i].handle.toLowerCase()) + '</span>' + '<br class="mobileOnly" />' + '</span> '
+										+ '<span class="messageAction">' + ((mess.toUser !== null) ? '<span class="desktopOnly">whispered</span> to <b>' + ((mess.toUser != idKey) ?  getUserById(mess.toUser).handle.toLowerCase() : 'you') + '<span class="mobileOnly">:</span></b>' : '<span class="desktopOnly">said</span>') + '<span class="desktopOnly">:</span> </span> '
+										+ '<span class="messageContents">' + mess.contents + '</span></div>';
+					}
 					return div;
 				}
 			}
 			return null;
+		}
+		function replaceHandleTags(s)
+		{
+			var selfReplace = new RegExp('@' + handle, 'g');
+			var selfPosReplace = new RegExp('@' + handle + '&#39;s', 'g');
+			var r = s.replace(selfPosReplace, '<b>your</b>');
+			r = r.replace(selfReplace, '<b>you</b>');
+			for (var i=0;i<users.length;i++)
+			{
+				r = r.replace('@' + users[i].handle, '<b>' + users[i].handle + '</b>');
+			}
+			return r;
 		}
 		function newEventMessage(mess)
 		{
